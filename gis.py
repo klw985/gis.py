@@ -53,7 +53,7 @@ def geocode_with_geopandas(address):
     return None, None
 
 # Streamlit app
-st.title("GIS Cross-Validation with Streamlit and Folium")
+st.title("GIS Cross-Validation")
 
 # User input for addresses or coordinates
 address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
