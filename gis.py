@@ -58,6 +58,13 @@ st.title("GIS Cross-Validation with Streamlit and Folium")
 # User input for addresses or coordinates
 address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
 
+# GIS service selection
+gis_services = st.multiselect(
+    "Select GIS services to use:",
+    ["Nominatim", "ArcGIS", "GeoPandas"],
+    default=["Nominatim", "ArcGIS", "GeoPandas"]
+)
+
 # Initialize session state variables if they do not exist
 if 'results' not in st.session_state:
     st.session_state.results = []
@@ -78,22 +85,22 @@ if st.button("Submit"):
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
-                # It's an address, geocode using three GIS services
+                # It's an address, geocode using the selected GIS services
 
-                # Geocode with Nominatim
-                lat, lon = geocode_with_nominatim(line)
-                if lat is not None and lon is not None:
-                    results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Nominatim-{index}', 'Color': 'blue', 'Number': index})
+                if "Nominatim" in gis_services:
+                    lat, lon = geocode_with_nominatim(line)
+                    if lat is not None and lon is not None:
+                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Nominatim-{index}', 'Color': 'blue', 'Number': index})
 
-                # Geocode with ArcGIS REST API
-                lat, lon = geocode_with_arcgis_api(line)
-                if lat is not None and lon is not None:
-                    results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'ArcGIS-{index}', 'Color': 'red', 'Number': index})
+                if "ArcGIS" in gis_services:
+                    lat, lon = geocode_with_arcgis_api(line)
+                    if lat is not None and lon is not None:
+                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'ArcGIS-{index}', 'Color': 'red', 'Number': index})
 
-                # Geocode with GeoPandas
-                lat, lon = geocode_with_geopandas(line)
-                if lat is not None and lon is not None:
-                    results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'GeoPandas-{index}', 'Color': 'purple', 'Number': index})
+                if "GeoPandas" in gis_services:
+                    lat, lon = geocode_with_geopandas(line)
+                    if lat is not None and lon is not None:
+                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'GeoPandas-{index}', 'Color': 'purple', 'Number': index})
 
         # Save results to session state
         st.session_state.results = results
@@ -120,3 +127,4 @@ if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None
     lat = st_data['last_clicked']['lat']
     lon = st_data['last_clicked']['lng']
     st.write(f"Last clicked coordinates: Latitude {lat}, Longitude {lon}")
+
