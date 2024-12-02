@@ -72,24 +72,27 @@ if st.button("Submit"):
         for index, line in enumerate(lines, start=1):
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 # It's a coordinate, so use directly
-                lat, lon = map(float, line.split(','))
-                results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Coordinate-{index}', 'Color': 'green', 'Number': index})
+                try:
+                    lat, lon = map(float, line.split(','))
+                    results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Coordinate-{index}', 'Color': 'green', 'Number': index})
+                except ValueError:
+                    st.error(f"Invalid coordinate: {line}")
             else:
                 # It's an address, geocode using three GIS services
-                
+
                 # Geocode with Nominatim
                 lat, lon = geocode_with_nominatim(line)
-                if lat and lon:
+                if lat is not None and lon is not None:
                     results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Nominatim-{index}', 'Color': 'blue', 'Number': index})
 
                 # Geocode with ArcGIS REST API
                 lat, lon = geocode_with_arcgis_api(line)
-                if lat and lon:
+                if lat is not None and lon is not None:
                     results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'ArcGIS-{index}', 'Color': 'red', 'Number': index})
 
                 # Geocode with GeoPandas
                 lat, lon = geocode_with_geopandas(line)
-                if lat and lon:
+                if lat is not None and lon is not None:
                     results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'GeoPandas-{index}', 'Color': 'purple', 'Number': index})
 
         # Save results to session state
@@ -100,13 +103,14 @@ if st.button("Submit"):
 # Create Folium map
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 
-# Add all markers to the map from session state
+# Add all markers to the map from session state, ensuring no NaN values
 for result in st.session_state.results:
-    folium.Marker(
-        location=[result['Latitude'], result['Longitude']],
-        popup=f"{result['Source']}: {result['Latitude']}, {result['Longitude']}",
-        icon=folium.Icon(color=result['Color'], icon='info-sign')
-    ).add_to(m)
+    if result['Latitude'] is not None and result['Longitude'] is not None:
+        folium.Marker(
+            location=[result['Latitude'], result['Longitude']],
+            popup=f"{result['Source']}: {result['Latitude']}, {result['Longitude']}",
+            icon=folium.Icon(color=result['Color'], icon='info-sign')
+        ).add_to(m)
 
 # Display map
 st_data = st_folium(m, width=725, height=500)
