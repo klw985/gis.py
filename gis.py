@@ -128,3 +128,11 @@ if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None
     lon = st_data['last_clicked']['lng']
     st.write(f"Last clicked coordinates: Latitude {lat}, Longitude {lon}")
 
+# Add a color legend to the Streamlit app
+st.markdown("### Color Legend")
+st.markdown("""
+- **Nominatim**: Blue
+- **ArcGIS**: Red
+- **GeoPandas**: Purple
+- **Direct Coordinates**: Green
+""")
