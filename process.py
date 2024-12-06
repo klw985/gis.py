@@ -1,18 +1,14 @@
 import streamlit as st
 import pandas as pd
+import requests
 from geopy.geocoders import Nominatim
-from arcgis.gis import GIS
-from arcgis.geocoding import geocode
-import geopandas as gpd
-import io
 
-st.set_page_config(page_title="Batch Geocoding Tool", layout="wide")
+st.set_page_config(page_title="GIS Batch Processing", layout="wide")
 
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
-arcgis_gis = GIS()
 
-# Geocoding functions
+# Function to geocode using Nominatim
 def geocode_with_nominatim(address):
     try:
         location = geocoder_nominatim.geocode(address)
@@ -22,80 +18,78 @@ def geocode_with_nominatim(address):
         st.error(f"Nominatim error for {address}: {e}")
     return None, None
 
-def geocode_with_arcgis(address):
+# Function to geocode using ArcGIS REST API
+def geocode_with_arcgis_api(address):
     try:
-        # Use the ArcGIS geocoding as specified in the gis.py document
         url = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates"
         params = {
             'f': 'json',
             'singleLine': address,
             'outFields': 'Match_addr,Addr_type'
         }
-        response = arcgis_gis._con.get(url, params)
-        if response:
-            data = response.get('candidates', [])
-            if data:
-                best_match = data[0]
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data['candidates']:
+                best_match = data['candidates'][0]
                 return best_match['location']['y'], best_match['location']['x']
     except Exception as e:
-        st.error(f"ArcGIS error for {address}: {e}")
-    return None, None
-
-def geocode_with_geopandas(address):
-    try:
-        geocoded = gpd.tools.geocode(
-            [address], provider="nominatim", user_agent="geo_app"
-        )
-        if not geocoded.empty:
-            location = geocoded.geometry.iloc[0]
-            return location.y, location.x
-    except Exception as e:
-        st.error(f"GeoPandas error for {address}: {e}")
+        st.error(f"ArcGIS REST API error for {address}: {e}")
     return None, None
 
 # Streamlit app
-st.title("Batch Geocoding with GIS Tools")
+st.title("GIS Batch Processing")
 
-st.write("Paste a table below. Ensure the first column is labeled 'Address'.")
+# User instructions
+st.markdown("### Enter multiple addresses in the text box below, one per line.")
+st.markdown("### The results will show geocoded coordinates for each address using the selected GIS services.")
 
-# Text area for user to paste data
-user_input = st.text_area(
-    "Paste your table here (e.g., from Excel). Ensure 'Address' is the first column.",
-    height=200
+# User input for addresses
+address_input = st.text_area("Enter addresses:", placeholder="Enter one address per line...")
+
+# GIS service selection
+gis_services = st.multiselect(
+    "Select GIS services to use:",
+    ["Nominatim", "ArcGIS"],
+    default=["Nominatim", "ArcGIS"]
 )
 
-if user_input:
-    try:
-        # Convert pasted text into a DataFrame
-        data = pd.read_csv(io.StringIO(user_input), header=None, names=["Address"])
-        
-        # Validate the presence of data
-        if 'Address' not in data.columns:
-            st.error("The pasted data must have an 'Address' column.")
-        else:
-            # Add new columns for geocoding results
-            st.write("Processing addresses, this may take a few minutes...")
-            data['Nominatim_Lat'], data['Nominatim_Lon'] = zip(
-                *data['Address'].apply(geocode_with_nominatim)
-            )
-            data['ArcGIS_Lat'], data['ArcGIS_Lon'] = zip(
-                *data['Address'].apply(geocode_with_arcgis)
-            )
-            data['GeoPandas_Lat'], data['GeoPandas_Lon'] = zip(
-                *data['Address'].apply(geocode_with_geopandas)
-            )
+# When the user clicks the "Process" button, geocode the addresses
+if st.button("Process"):
+    if address_input:
+        lines = [line.strip() for line in address_input.split('\n') if line.strip()]
+        results = []
 
-            # Display the results
-            st.write("Geocoded Results:")
-            st.dataframe(data)
+        # Process each address
+        for line in lines:
+            row = {'Address': line}
 
-            # Allow users to copy the data or save it
-            csv = data.to_csv(index=False)
-            st.download_button(
-                label="Download Geocoded Results as CSV",
-                data=csv,
-                file_name="geocoded_results.csv",
-                mime="text/csv",
-            )
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+            # Nominatim
+            if "Nominatim" in gis_services:
+                lat, lon = geocode_with_nominatim(line)
+                row['Nominatim Latitude'] = lat
+                row['Nominatim Longitude'] = lon
+
+            # ArcGIS
+            if "ArcGIS" in gis_services:
+                lat, lon = geocode_with_arcgis_api(line)
+                row['ArcGIS Latitude'] = lat
+                row['ArcGIS Longitude'] = lon
+
+            results.append(row)
+
+        # Display results
+        if results:
+            results_df = pd.DataFrame(results)
+            st.markdown("### Geocoding Results")
+            st.dataframe(results_df)
+
+            # Provide a copy-paste table
+            st.markdown("### Copy-Paste Table")
+            st.text_area("Results Table (Copy-Paste)", results_df.to_csv(index=False, sep='\t'), height=300)
+    else:
+        st.warning("Please enter at least one address.")
+
+# Provide a placeholder for any additional notes
+st.markdown("### Notes")
+st.markdown("Ensure the addresses are entered in a standardized format for best results.")
