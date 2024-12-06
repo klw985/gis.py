@@ -6,6 +6,8 @@ from arcgis.geocoding import geocode
 import geopandas as gpd
 import io
 
+st.set_page_config(page_title="Batch Geocoding Tool", layout="wide")
+
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
 arcgis_gis = GIS()
