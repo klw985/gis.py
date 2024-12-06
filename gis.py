@@ -6,6 +6,8 @@ import geopandas as gpd
 import pandas as pd
 import requests
 
+st.set_page_config(page_title="GIS Map Viewer", layout="wide")
+
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
 
