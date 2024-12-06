@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from geopy.geocoders import Nominatim
+import geopandas as gpd
 
 st.set_page_config(page_title="GIS Batch Processing", layout="wide")
 
@@ -37,6 +38,20 @@ def geocode_with_arcgis_api(address):
         st.error(f"ArcGIS REST API error for {address}: {e}")
     return None, None
 
+# Function to geocode with GeoPandas
+def geocode_with_geopandas(address):
+    try:
+        gdf = gpd.tools.geocode(
+            [address], 
+            provider="nominatim", 
+            user_agent="geo_app"
+        )
+        if not gdf.empty:
+            return gdf.geometry.y.iloc[0], gdf.geometry.x.iloc[0]
+    except Exception as e:
+        st.error(f"GeoPandas error for {address}: {e}")
+    return None, None
+
 # Streamlit app
 st.title("GIS Batch Processing")
 
@@ -50,8 +65,8 @@ address_input = st.text_area("Enter addresses:", placeholder="Enter one address 
 # GIS service selection
 gis_services = st.multiselect(
     "Select GIS services to use:",
-    ["Nominatim", "ArcGIS"],
-    default=["Nominatim", "ArcGIS"]
+    ["Nominatim", "ArcGIS", "GeoPandas"],
+    default=["Nominatim", "ArcGIS", "GeoPandas"]
 )
 
 # When the user clicks the "Process" button, geocode the addresses
@@ -75,6 +90,12 @@ if st.button("Process"):
                 lat, lon = geocode_with_arcgis_api(line)
                 row['ArcGIS Latitude'] = lat
                 row['ArcGIS Longitude'] = lon
+
+            # GeoPandas
+            if "GeoPandas" in gis_services:
+                lat, lon = geocode_with_geopandas(line)
+                row['GeoPandas Latitude'] = lat
+                row['GeoPandas Longitude'] = lon
 
             results.append(row)
 
