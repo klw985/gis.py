@@ -5,11 +5,16 @@ from geopy.geocoders import Nominatim
 import geopandas as gpd
 import pandas as pd
 import requests
+import googlemaps  # Add Google Maps library
 
 st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
+
+# Initialize Google Maps geocoder
+GOOGLE_API_KEY = "AIzaSyAQRwPup2hRdar19THb07uTMeKVOMHv65I"  # Replace with your API key
+gmaps = googlemaps.Client(key=GOOGLE_API_KEY)
 
 # Function to geocode using Nominatim
 def geocode_with_nominatim(address):
@@ -40,7 +45,7 @@ def geocode_with_arcgis_api(address):
         st.error(f"ArcGIS REST API error for {address}: {e}")
     return None, None
 
-# Function to geocode with GeoPandas
+# Function to geocode using GeoPandas
 def geocode_with_geopandas(address):
     try:
         gdf = gpd.tools.geocode(
@@ -54,6 +59,17 @@ def geocode_with_geopandas(address):
         st.error(f"GeoPandas error for {address}: {e}")
     return None, None
 
+# Function to geocode using Google Maps API
+def geocode_with_google(address):
+    try:
+        geocode_result = gmaps.geocode(address)
+        if geocode_result:
+            location = geocode_result[0]["geometry"]["location"]
+            return location["lat"], location["lng"]
+    except Exception as e:
+        st.error(f"Google Maps error for {address}: {e}")
+    return None, None
+
 # Streamlit app
 st.title("GIS Cross-Validation")
 
@@ -63,8 +79,8 @@ address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 
 # GIS service selection
 gis_services = st.multiselect(
     "Select GIS services to use:",
-    ["Nominatim", "ArcGIS", "GeoPandas"],
-    default=["Nominatim", "ArcGIS", "GeoPandas"]
+    ["Nominatim", "ArcGIS", "GeoPandas", "Google Maps"],
+    default=["Nominatim", "ArcGIS", "GeoPandas", "Google Maps"]
 )
 
 # Initialize session state variables if they do not exist
@@ -88,7 +104,6 @@ if st.button("Submit"):
                     st.error(f"Invalid coordinate: {line}")
             else:
                 # It's an address, geocode using the selected GIS services
-
                 if "Nominatim" in gis_services:
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
@@ -103,6 +118,11 @@ if st.button("Submit"):
                     lat, lon = geocode_with_geopandas(line)
                     if lat is not None and lon is not None:
                         results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'GeoPandas-{index}', 'Color': 'purple', 'Number': index})
+
+                if "Google Maps" in gis_services:
+                    lat, lon = geocode_with_google(line)
+                    if lat is not None and lon is not None:
+                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Google-{index}', 'Color': 'orange', 'Number': index})
 
         # Save results to session state
         st.session_state.results = results
@@ -136,5 +156,6 @@ st.markdown("""
 - **Nominatim**: Blue
 - **ArcGIS**: Red
 - **GeoPandas**: Purple
+- **Google Maps**: Orange
 - **Direct Coordinates**: Green
 """)
