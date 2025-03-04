@@ -79,7 +79,7 @@ try:
     districts_gdf = gpd.read_file("congressional_districts/gz_2010_29_500_11_500k.shp")
     # Convert to WGS84 (EPSG:4326) so that point-in-polygon tests work.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
-    # Uncomment if you need to inspect available columns:
+    # Uncomment next line if you need to inspect available columns.
     # st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
@@ -177,6 +177,11 @@ if submit_button:
 
 # Create the base Folium map.
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
+# Add tile layers for both street and satellite views.
+folium.TileLayer('OpenStreetMap', name='Street View').add_to(m)
+folium.TileLayer('Esri.WorldImagery', name='Satellite View').add_to(m)
+folium.LayerControl().add_to(m)
+
 marker_cluster = MarkerCluster().add_to(m)
 
 # Group markers by nearly identical coordinates (rounded to 5 decimals).
@@ -228,15 +233,14 @@ if all_coords:
 
 st_data = st_folium(m, width=725, height=500)
 
-# Display last clicked coordinates in the requested format along with the district.
+# Display last clicked coordinates in the requested format along with district.
 if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
     last_clicked = st_data['last_clicked']
-    # Format the coordinates as: 39.02131757437681, -94.48791503906251
+    # Format as a simple comma-separated string.
     coords_str = f"{last_clicked['lat']}, {last_clicked['lng']}"
-    # Determine the district for the clicked point.
     clicked_point = Point(last_clicked['lng'], last_clicked['lat'])
     clicked_district = get_district_from_point(clicked_point, districts_gdf)
-    st.markdown(f"**Last Clicked Coordinates:** {coords_str} (District: {clicked_district})")
+    st.markdown(f"**Last clicked:** {coords_str} (District: {clicked_district})")
 
 # Build a table of all geocoded points with district information.
 if st.session_state.results:
