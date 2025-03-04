@@ -7,7 +7,6 @@ import geopandas as gpd
 import requests
 from opencage.geocoder import OpenCageGeocode  # Import OpenCage library
 import math
-import pandas as pd
 
 st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 
@@ -73,30 +72,26 @@ def geocode_with_opencage(address):
 
 st.title("GIS Cross-Validation")
 
-# Use columns to arrange the text area, submit button, and GIS services dropdown side-by-side.
-col1, col2 = st.columns([3, 1])
-with col1:
-    address_input = st.text_area(
-        "Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:"
-    )
-    submit_button = st.button("Submit")
-with col2:
-    gis_services = st.multiselect(
-        "Select GIS services to use:",
-        ["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"],
-        default=["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"]
-    )
+# User input for addresses or coordinates
+address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
+
+# Select GIS services (Google Maps removed, OpenCage added)
+gis_services = st.multiselect(
+    "Select GIS services to use:",
+    ["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"],
+    default=["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"]
+)
 
 # Initialize session state for results if not already present
 if 'results' not in st.session_state:
     st.session_state.results = []
 
-if submit_button:
+if st.button("Submit"):
     if address_input:
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
-            # If the input appears to be comma-separated coordinates, use them directly.
+            # If the input looks like comma-separated coordinates, use them directly.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -110,7 +105,7 @@ if submit_button:
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
-                # Otherwise, use each selected GIS service for geocoding the address.
+                # Otherwise, geocode the address using each selected GIS service.
                 if "Nominatim" in gis_services:
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
@@ -155,26 +150,11 @@ if submit_button:
     else:
         st.warning("Please enter at least one address or coordinate.")
 
-# Create the base Folium map centered on Missouri (approximate center)
-m = folium.Map(location=[38.573936, -92.603760], zoom_start=7, control_scale=True)
-
-# Add default tile layer and satellite view layer
-folium.TileLayer('OpenStreetMap', name="Street View").add_to(m)
-folium.TileLayer('Esri.WorldImagery', name="Satellite View").add_to(m)
-
-# -- Temporarily removed congressional district layer --
-# try:
-#     folium.GeoJson("2010_Congressional_Districts.json", name="Congressional Districts").add_to(m)
-# except Exception as e:
-#     st.error("Error loading Missouri congressional district boundaries: " + str(e))
-
-# Add layer control so users can toggle layers.
-folium.LayerControl().add_to(m)
-
-# Create a MarkerCluster for managing overlapping markers.
+# Create the base Folium map and add a MarkerCluster.
+m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Group results by nearly identical coordinates (rounding to 5 decimals)
+# Group markers by nearly identical coordinates.
 grouped_by_coord = {}
 for res in st.session_state.results:
     lat = res['Latitude']
@@ -182,21 +162,28 @@ for res in st.session_state.results:
     if lat is None or lon is None or math.isnan(lat) or math.isnan(lon):
         st.error(f"Skipping invalid coordinates for input {res['Input']} from {res['Source']}: ({lat}, {lon})")
         continue
+    # Round coordinates to group nearly identical locations (e.g., 5 decimal places)
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
 
-# For each group, create one marker. If multiple results share the same spot, list all details.
+# For each group, create one marker.
 for key, group in grouped_by_coord.items():
+    # Use the average of the group for display.
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
     
+    # Build tooltip text.
     tooltip_lines = []
+    # If markers come from the same input, list input once per package.
     for item in group:
         tooltip_lines.append(f"Input: {item['Input']}<br>{item['Source']}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
     tooltip_text = "<br><br>".join(tooltip_lines)
     
-    # If multiple markers overlap, use a distinct color (black), otherwise use the individual package color.
-    marker_color = "black" if len(group) > 1 else group[0]['Color']
+    # If there's more than one result at this spot, use a distinct marker color (e.g., black).
+    if len(group) > 1:
+        marker_color = "black"
+    else:
+        marker_color = group[0]['Color']
     
     folium.Marker(
         location=[avg_lat, avg_lon],
@@ -205,17 +192,19 @@ for key, group in grouped_by_coord.items():
         icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
 
-# Render the map in Streamlit.
 st_data = st_folium(m, width=725, height=500)
 
-# Build a table of all geocoded points.
-if st.session_state.results:
-    df = pd.DataFrame(st.session_state.results)
-    st.markdown("### Geocoded Results")
-    st.dataframe(df)
-
-# Show clicked coordinates in a separate section for easy copy-paste.
 if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
-    clicked_coords = st_data['last_clicked']
-    st.markdown("### Last Clicked Coordinate")
-    st.write(f"Latitude: {clicked_coords['lat']}, Longitude: {clicked_coords['lng']}")
+    lat = st_data['last_clicked']['lat']
+    lon = st_data['last_clicked']['lng']
+    st.write(f"Last clicked coordinates: Latitude {lat}, Longitude {lon}")
+
+st.markdown("### Color Legend")
+st.markdown("""
+- **Nominatim**: Blue
+- **ArcGIS**: Red
+- **GeoPandas**: Purple
+- **OpenCage**: Orange
+- **Direct Coordinates**: Green
+- **Overlapping Markers**: Black
+""")
