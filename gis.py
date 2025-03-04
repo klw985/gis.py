@@ -1,5 +1,6 @@
 import streamlit as st
 import folium
+from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 import geopandas as gpd
@@ -74,13 +75,13 @@ def geocode_with_opencage(address):
         st.error(f"OpenCage error for {address}: {e}")
     return None, None
 
-# Streamlit app
+# Streamlit app title
 st.title("GIS Cross-Validation")
 
 # User input for addresses or coordinates
 address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
 
-# GIS service selection (removed Google Maps and added OpenCage)
+# GIS service selection (removed Google Maps, added OpenCage)
 gis_services = st.multiselect(
     "Select GIS services to use:",
     ["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"],
@@ -99,34 +100,64 @@ if st.button("Submit"):
 
         # Loop through addresses or coordinates, assign an index number for each
         for index, line in enumerate(lines, start=1):
+            # Check if the input line looks like a coordinate (contains comma-separated numbers)
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
-                # It's a coordinate, so use directly
                 try:
                     lat, lon = map(float, line.split(','))
-                    results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Coordinate-{index}', 'Color': 'green', 'Number': index})
+                    results.append({
+                        'Latitude': lat, 
+                        'Longitude': lon, 
+                        'Source': f'Coordinate-{index}', 
+                        'Color': 'green', 
+                        'Number': index
+                    })
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
-                # It's an address, geocode using the selected GIS services
+                # It's an address; geocode using the selected GIS services
                 if "Nominatim" in gis_services:
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
-                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Nominatim-{index}', 'Color': 'blue', 'Number': index})
+                        results.append({
+                            'Latitude': lat, 
+                            'Longitude': lon, 
+                            'Source': f'Nominatim-{index}', 
+                            'Color': 'blue', 
+                            'Number': index
+                        })
 
                 if "ArcGIS" in gis_services:
                     lat, lon = geocode_with_arcgis_api(line)
                     if lat is not None and lon is not None:
-                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'ArcGIS-{index}', 'Color': 'red', 'Number': index})
+                        results.append({
+                            'Latitude': lat, 
+                            'Longitude': lon, 
+                            'Source': f'ArcGIS-{index}', 
+                            'Color': 'red', 
+                            'Number': index
+                        })
 
                 if "GeoPandas" in gis_services:
                     lat, lon = geocode_with_geopandas(line)
                     if lat is not None and lon is not None:
-                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'GeoPandas-{index}', 'Color': 'purple', 'Number': index})
+                        results.append({
+                            'Latitude': lat, 
+                            'Longitude': lon, 
+                            'Source': f'GeoPandas-{index}', 
+                            'Color': 'purple', 
+                            'Number': index
+                        })
 
                 if "OpenCage" in gis_services:
                     lat, lon = geocode_with_opencage(line)
                     if lat is not None and lon is not None:
-                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'OpenCage-{index}', 'Color': 'orange', 'Number': index})
+                        results.append({
+                            'Latitude': lat, 
+                            'Longitude': lon, 
+                            'Source': f'OpenCage-{index}', 
+                            'Color': 'orange', 
+                            'Number': index
+                        })
 
         # Save results to session state
         st.session_state.results = results
@@ -136,16 +167,19 @@ if st.button("Submit"):
 # Create Folium map
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 
-# Add all markers to the map from session state, ensuring no NaN values
+# Create a MarkerCluster object and add it to the map
+marker_cluster = MarkerCluster().add_to(m)
+
+# Add all markers to the MarkerCluster from session state
 for result in st.session_state.results:
     if result['Latitude'] is not None and result['Longitude'] is not None:
         folium.Marker(
             location=[result['Latitude'], result['Longitude']],
             popup=f"{result['Source']}: {result['Latitude']}, {result['Longitude']}",
             icon=folium.Icon(color=result['Color'], icon='info-sign')
-        ).add_to(m)
+        ).add_to(marker_cluster)
 
-# Display map
+# Display map in Streamlit
 st_data = st_folium(m, width=725, height=500)
 
 # Display coordinates for the last clicked marker (if any)
