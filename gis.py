@@ -175,8 +175,8 @@ if submit_button:
     else:
         st.warning("Please enter at least one address or coordinate.")
 
-# Create the base Folium map.
-m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
+# Create the base Folium map in satellite view.
+m = folium.Map(location=[38.5767, -92.1735], zoom_start=5, tiles="Esri.WorldImagery")
 marker_cluster = MarkerCluster().add_to(m)
 
 # Group markers by nearly identical coordinates (rounded to 5 decimals).
@@ -266,13 +266,3 @@ if st.session_state.results:
     df = pd.DataFrame(results_table)
     st.markdown("### Geocoded Results")
     st.dataframe(df)
-
-st.markdown("### Color Legend")
-st.markdown("""
-- **Nominatim**: Blue  
-- **ArcGIS**: Red  
-- **GeoPandas**: Purple  
-- **OpenCage**: Orange  
-- **Direct Coordinates**: Green  
-- **Overlapping Markers**: Black
-""")
