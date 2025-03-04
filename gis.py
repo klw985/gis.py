@@ -6,6 +6,7 @@ from geopy.geocoders import Nominatim
 import geopandas as gpd
 import requests
 from opencage.geocoder import OpenCageGeocode  # Import OpenCage library
+import math
 
 st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 
@@ -91,7 +92,7 @@ if st.button("Submit"):
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
-            # If the input looks like comma-separated coordinates, use them directly
+            # If the input looks like comma-separated coordinates, use them directly.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -105,7 +106,7 @@ if st.button("Submit"):
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
-                # Use each selected GIS service for an address
+                # Otherwise, geocode the address using each selected GIS service.
                 if "Nominatim" in gis_services:
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
@@ -150,46 +151,24 @@ if st.button("Submit"):
     else:
         st.warning("Please enter at least one address or coordinate.")
 
-# Create the base Folium map
+# Create the base Folium map and add a MarkerCluster.
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-import math
-# ... (rest of your code)
-
-# Group results by the input text (address or coordinates)
-grouped = {}
+# Add each result as its own marker.
 for res in st.session_state.results:
-    key = res['Input']
-    if key not in grouped:
-        grouped[key] = []
-    grouped[key].append(res)
-
-# For each input group, compute a representative coordinate and build tooltip text
-for input_text, group in grouped.items():
-    avg_lat = sum(item['Latitude'] for item in group) / len(group)
-    avg_lon = sum(item['Longitude'] for item in group) / len(group)
-    
-    # Check if the computed coordinates are NaN
-    if avg_lat is None or avg_lon is None or math.isnan(avg_lat) or math.isnan(avg_lon):
-        st.error(f"Skipping marker for {input_text} due to invalid coordinates: ({avg_lat}, {avg_lon})")
+    lat = res['Latitude']
+    lon = res['Longitude']
+    if lat is None or lon is None or math.isnan(lat) or math.isnan(lon):
+        st.error(f"Skipping marker for input {res['Input']} from {res['Source']} due to invalid coordinates: ({lat}, {lon})")
         continue
-    
-    tooltip_lines = [f"Input: {input_text}"]
-    for item in group:
-        tooltip_lines.append(f"{item['Source']}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
-    tooltip_text = "<br>".join(tooltip_lines)
-    
-    # Use the first item's color for the marker icon
-    marker_color = group[0]['Color']
-    
+    tooltip_text = f"Input: {res['Input']}<br>{res['Source']}: ({lat:.4f}, {lon:.4f})"
     folium.Marker(
-        location=[avg_lat, avg_lon],
+        location=[lat, lon],
         tooltip=tooltip_text,
         popup=folium.Popup(tooltip_text, parse_html=True),
-        icon=folium.Icon(color=marker_color, icon='info-sign')
+        icon=folium.Icon(color=res['Color'], icon='info-sign')
     ).add_to(marker_cluster)
-
 
 st_data = st_folium(m, width=725, height=500)
 
