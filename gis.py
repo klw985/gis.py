@@ -236,7 +236,7 @@ if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None
     # Determine the district for the clicked point.
     clicked_point = Point(last_clicked['lng'], last_clicked['lat'])
     clicked_district = get_district_from_point(clicked_point, districts_gdf)
-    st.markdown(f"**Last clicked:** {coords_str} (District: {clicked_district})")
+    st.markdown(f"**Last Clicked Coordinates:** {coords_str} (District: {clicked_district})")
 
 # Build a table of all geocoded points with district information.
 if st.session_state.results:
