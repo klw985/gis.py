@@ -79,7 +79,7 @@ try:
     districts_gdf = gpd.read_file("congressional_districts/gz_2010_29_500_11_500k.shp")
     # Convert to WGS84 (EPSG:4326) so that point-in-polygon tests work.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
-    # Uncomment the next line if you need to inspect the available columns for debugging.
+    # Uncomment if you need to inspect available columns:
     # st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
@@ -88,13 +88,12 @@ except Exception as e:
 def get_district_from_point(point, districts_gdf):
     """
     Returns the congressional district for a given point.
-    For your dataset, the 'CD' column contains the district number.
+    For this dataset, the 'CD' field holds the district number.
     """
     if districts_gdf is None:
         return "No district data"
     for idx, row in districts_gdf.iterrows():
         if row['geometry'].contains(point):
-            # In this case, we assume 'CD' holds the congressional district.
             return row['CD']
     return "Not in any district"
 
@@ -229,6 +228,16 @@ if all_coords:
 
 st_data = st_folium(m, width=725, height=500)
 
+# Display last clicked coordinates in the requested format along with the district.
+if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
+    last_clicked = st_data['last_clicked']
+    # Format the coordinates as: 39.02131757437681, -94.48791503906251
+    coords_str = f"{last_clicked['lat']}, {last_clicked['lng']}"
+    # Determine the district for the clicked point.
+    clicked_point = Point(last_clicked['lng'], last_clicked['lat'])
+    clicked_district = get_district_from_point(clicked_point, districts_gdf)
+    st.markdown(f"**Last clicked:** {coords_str} (District: {clicked_district})")
+
 # Build a table of all geocoded points with district information.
 if st.session_state.results:
     results_table = []
@@ -247,7 +256,12 @@ if st.session_state.results:
     st.markdown("### Geocoded Results")
     st.dataframe(df)
 
-# Display last clicked coordinates that update as you click on different parts of the map.
-if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
-    last_clicked = st_data['last_clicked']
-    st.markdown(f"**Last clicked coordinates:** Latitude {last_clicked['lat']}, Longitude {last_clicked['lng']}")
+st.markdown("### Color Legend")
+st.markdown("""
+- **Nominatim**: Blue  
+- **ArcGIS**: Red  
+- **GeoPandas**: Purple  
+- **OpenCage**: Orange  
+- **Direct Coordinates**: Green  
+- **Overlapping Markers**: Black
+""")
