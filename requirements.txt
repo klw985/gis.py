@@ -5,6 +5,4 @@ geopandas>=0.10.2
 pandas>=1.3.3
 requests>=2.26.0
 streamlit-folium
-googlemaps>=4.4.5
 opencage>=1.2.0
-
