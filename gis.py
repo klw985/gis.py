@@ -12,7 +12,6 @@ st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
-
 OPENCAGE_API_KEY = "c45010c61631462eac954223488bbd4b"  # Replace with your API key from https://opencagedata.com
 opencage_geocoder = OpenCageGeocode(OPENCAGE_API_KEY)
 
@@ -155,19 +154,42 @@ if st.button("Submit"):
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Add each result as its own marker.
+# Group markers by nearly identical coordinates.
+grouped_by_coord = {}
 for res in st.session_state.results:
     lat = res['Latitude']
     lon = res['Longitude']
     if lat is None or lon is None or math.isnan(lat) or math.isnan(lon):
-        st.error(f"Skipping marker for input {res['Input']} from {res['Source']} due to invalid coordinates: ({lat}, {lon})")
+        st.error(f"Skipping invalid coordinates for input {res['Input']} from {res['Source']}: ({lat}, {lon})")
         continue
-    tooltip_text = f"Input: {res['Input']}<br>{res['Source']}: ({lat:.4f}, {lon:.4f})"
+    # Round coordinates to group nearly identical locations (e.g., 5 decimal places)
+    key = (round(lat, 5), round(lon, 5))
+    grouped_by_coord.setdefault(key, []).append(res)
+
+# For each group, create one marker.
+for key, group in grouped_by_coord.items():
+    # Use the average of the group for display.
+    avg_lat = sum(item['Latitude'] for item in group) / len(group)
+    avg_lon = sum(item['Longitude'] for item in group) / len(group)
+    
+    # Build tooltip text.
+    tooltip_lines = []
+    # If markers come from the same input, list input once per package.
+    for item in group:
+        tooltip_lines.append(f"Input: {item['Input']}<br>{item['Source']}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
+    tooltip_text = "<br><br>".join(tooltip_lines)
+    
+    # If there's more than one result at this spot, use a distinct marker color (e.g., black).
+    if len(group) > 1:
+        marker_color = "black"
+    else:
+        marker_color = group[0]['Color']
+    
     folium.Marker(
-        location=[lat, lon],
+        location=[avg_lat, avg_lon],
         tooltip=tooltip_text,
         popup=folium.Popup(tooltip_text, parse_html=True),
-        icon=folium.Icon(color=res['Color'], icon='info-sign')
+        icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
 
 st_data = st_folium(m, width=725, height=500)
@@ -184,4 +206,5 @@ st.markdown("""
 - **GeoPandas**: Purple
 - **OpenCage**: Orange
 - **Direct Coordinates**: Green
+- **Overlapping Markers**: Black
 """)
