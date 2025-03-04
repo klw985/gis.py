@@ -72,7 +72,7 @@ def geocode_with_opencage(address):
 
 st.title("GIS Cross-Validation")
 
-# Arrange the input area using columns: text area and submit button in left column, and the dropdown in right column.
+# Arrange input elements using columns so the dropdown doesn't cover the submit button.
 col1, col2 = st.columns([3, 1])
 with col1:
     address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
@@ -93,7 +93,7 @@ if submit_button:
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
-            # If the input appears to be comma-separated coordinates, use them directly.
+            # If the input looks like comma-separated coordinates, use them directly.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -156,7 +156,7 @@ if submit_button:
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Group markers by nearly identical coordinates (round to 5 decimals).
+# Group markers by nearly identical coordinates (rounding to 5 decimals).
 grouped_by_coord = {}
 for res in st.session_state.results:
     lat = res['Latitude']
@@ -185,6 +185,19 @@ for key, group in grouped_by_coord.items():
         popup=folium.Popup(tooltip_text, parse_html=True),
         icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
+
+# Automatically adjust the map view to include all points.
+all_coords = [
+    (res['Latitude'], res['Longitude'])
+    for res in st.session_state.results
+    if res['Latitude'] is not None and res['Longitude'] is not None and not math.isnan(res['Latitude']) and not math.isnan(res['Longitude'])
+]
+if all_coords:
+    min_lat = min(lat for lat, lon in all_coords)
+    max_lat = max(lat for lat, lon in all_coords)
+    min_lon = min(lon for lat, lon in all_coords)
+    max_lon = max(lon for lat, lon in all_coords)
+    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
 
 st_data = st_folium(m, width=725, height=500)
 
