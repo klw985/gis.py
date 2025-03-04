@@ -154,6 +154,9 @@ if st.button("Submit"):
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
+import math
+# ... (rest of your code)
+
 # Group results by the input text (address or coordinates)
 grouped = {}
 for res in st.session_state.results:
@@ -162,10 +165,16 @@ for res in st.session_state.results:
         grouped[key] = []
     grouped[key].append(res)
 
-# For each input group, compute a representative coordinate (average of results) and build tooltip text
+# For each input group, compute a representative coordinate and build tooltip text
 for input_text, group in grouped.items():
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
+    
+    # Check if the computed coordinates are NaN
+    if avg_lat is None or avg_lon is None or math.isnan(avg_lat) or math.isnan(avg_lon):
+        st.error(f"Skipping marker for {input_text} due to invalid coordinates: ({avg_lat}, {avg_lon})")
+        continue
+    
     tooltip_lines = [f"Input: {input_text}"]
     for item in group:
         tooltip_lines.append(f"{item['Source']}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
@@ -180,6 +189,7 @@ for input_text, group in grouped.items():
         popup=folium.Popup(tooltip_text, parse_html=True),
         icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
+
 
 st_data = st_folium(m, width=725, height=500)
 
