@@ -81,7 +81,7 @@ try:
     # Convert to WGS84 (EPSG:4326) so that point-in-polygon tests work.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
     # For debugging: print available columns to inspect property names.
-    st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
+    #st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
     districts_gdf = None
