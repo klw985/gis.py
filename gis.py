@@ -5,16 +5,15 @@ from geopy.geocoders import Nominatim
 import geopandas as gpd
 import pandas as pd
 import requests
-import googlemaps  # Add Google Maps library
+from opencage.geocoder import OpenCageGeocode  # Import OpenCage library
 
 st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
 
-# Initialize Google Maps geocoder
-GOOGLE_API_KEY = "AIzaSyAQRwPup2hRdar19THb07uTMeKVOMHv65I"  # Replace with your API key
-gmaps = googlemaps.Client(key=GOOGLE_API_KEY)
+OPENCAGE_API_KEY = "c45010c61631462eac954223488bbd4b"  # Replace with your free API key from https://opencagedata.com
+opencage_geocoder = OpenCageGeocode(OPENCAGE_API_KEY)
 
 # Function to geocode using Nominatim
 def geocode_with_nominatim(address):
@@ -59,15 +58,20 @@ def geocode_with_geopandas(address):
         st.error(f"GeoPandas error for {address}: {e}")
     return None, None
 
-# Function to geocode using Google Maps API
-def geocode_with_google(address):
+# Function to geocode using OpenCage
+def geocode_with_opencage(address):
     try:
-        geocode_result = gmaps.geocode(address)
-        if geocode_result:
-            location = geocode_result[0]["geometry"]["location"]
-            return location["lat"], location["lng"]
+        results = opencage_geocoder.geocode(address)
+        if results and len(results) > 0:
+            location = results[0].get('geometry')
+            if location:
+                return location.get('lat'), location.get('lng')
+            else:
+                st.error(f"OpenCage returned an unexpected format for {address}.")
+        else:
+            st.warning(f"No results returned from OpenCage for {address}.")
     except Exception as e:
-        st.error(f"Google Maps error for {address}: {e}")
+        st.error(f"OpenCage error for {address}: {e}")
     return None, None
 
 # Streamlit app
@@ -76,11 +80,11 @@ st.title("GIS Cross-Validation")
 # User input for addresses or coordinates
 address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
 
-# GIS service selection
+# GIS service selection (removed Google Maps and added OpenCage)
 gis_services = st.multiselect(
     "Select GIS services to use:",
-    ["Nominatim", "ArcGIS", "GeoPandas", "Google Maps"],
-    default=["Nominatim", "ArcGIS", "GeoPandas", "Google Maps"]
+    ["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"],
+    default=["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"]
 )
 
 # Initialize session state variables if they do not exist
@@ -119,10 +123,10 @@ if st.button("Submit"):
                     if lat is not None and lon is not None:
                         results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'GeoPandas-{index}', 'Color': 'purple', 'Number': index})
 
-                if "Google Maps" in gis_services:
-                    lat, lon = geocode_with_google(line)
+                if "OpenCage" in gis_services:
+                    lat, lon = geocode_with_opencage(line)
                     if lat is not None and lon is not None:
-                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'Google-{index}', 'Color': 'orange', 'Number': index})
+                        results.append({'Latitude': lat, 'Longitude': lon, 'Source': f'OpenCage-{index}', 'Color': 'orange', 'Number': index})
 
         # Save results to session state
         st.session_state.results = results
@@ -156,6 +160,6 @@ st.markdown("""
 - **Nominatim**: Blue
 - **ArcGIS**: Red
 - **GeoPandas**: Purple
-- **Google Maps**: Orange
+- **OpenCage**: Orange
 - **Direct Coordinates**: Green
 """)
