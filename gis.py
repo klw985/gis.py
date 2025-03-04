@@ -74,12 +74,13 @@ def geocode_with_opencage(address):
 
 st.title("GIS Cross-Validation")
 
-# Load Missouri 2010 congressional districts GeoJSON.
+# Load Missouri 2010 congressional districts from the dedicated folder.
 try:
-    districts_gdf = gpd.read_file("2010_Congressional_Districts.json")
-    # Convert to WGS84 so that point tests work
+    # Ensure all associated files (.shp, .dbf, .prj, .shx) are in the folder 'congressional_districts'
+    districts_gdf = gpd.read_file("congressional_districts/2010_Congressional_Districts.shp")
+    # Convert to WGS84 (EPSG:4326) if necessary.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
-    # For debugging: print the available columns to inspect property names.
+    # For debugging: show available columns so you know which property holds the district label.
     st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
@@ -87,21 +88,21 @@ except Exception as e:
 
 def get_district_from_point(point, districts_gdf):
     """
-    Returns a string identifying the congressional district that contains the point.
-    Adjust the list of candidate keys based on your GeoJSON's properties.
+    Returns the congressional district for a given Shapely point.
+    Adjust the candidate keys based on your GeoDataFrame's properties.
     """
     if districts_gdf is None:
         return "No district data"
     for idx, row in districts_gdf.iterrows():
         if row['geometry'].contains(point):
-            # Update these keys based on the columns printed above.
+            # Try candidate keys; update these based on the printed columns.
             for col in ['CD115FP', 'district', 'DISTRICT', 'NAME', 'GEOID']:
                 if col in row and row[col]:
                     return row[col]
             return "Unknown District"
     return "Not in any district"
 
-# Arrange input elements.
+# Arrange input elements in two columns.
 col1, col2 = st.columns([3, 1])
 with col1:
     address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
@@ -121,7 +122,7 @@ if submit_button:
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
-            # If the input looks like comma-separated coordinates, use them directly.
+            # Use direct coordinates if input looks like comma-separated numbers.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -183,7 +184,7 @@ if submit_button:
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Group markers by nearly identical coordinates.
+# Group markers by nearly identical coordinates (rounded to 5 decimals).
 grouped_by_coord = {}
 for res in st.session_state.results:
     lat = res['Latitude']
@@ -194,12 +195,12 @@ for res in st.session_state.results:
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
 
-# Create markers and add district info.
+# For each group, create one marker with district info.
 for key, group in grouped_by_coord.items():
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
     
-    # Create a Shapely point for the averaged coordinates (note: Point expects (lon, lat))
+    # Create a point for the averaged coordinates (Point takes (lon, lat)).
     point = Point(avg_lon, avg_lat)
     district = get_district_from_point(point, districts_gdf)
     
@@ -217,7 +218,7 @@ for key, group in grouped_by_coord.items():
         icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
 
-# Adjust the map view to include all points.
+# Adjust the map view to include all markers.
 all_coords = [
     (res['Latitude'], res['Longitude'])
     for res in st.session_state.results
