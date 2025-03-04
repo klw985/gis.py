@@ -72,26 +72,28 @@ def geocode_with_opencage(address):
 
 st.title("GIS Cross-Validation")
 
-# User input for addresses or coordinates
-address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
+# Arrange the input area using columns: text area and submit button in left column, and the dropdown in right column.
+col1, col2 = st.columns([3, 1])
+with col1:
+    address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
+    submit_button = st.button("Submit")
+with col2:
+    gis_services = st.multiselect(
+        "Select GIS services to use:",
+        ["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"],
+        default=["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"]
+    )
 
-# Select GIS services (Google Maps removed, OpenCage added)
-gis_services = st.multiselect(
-    "Select GIS services to use:",
-    ["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"],
-    default=["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"]
-)
-
-# Initialize session state for results if not already present
+# Initialize session state for results if not already present.
 if 'results' not in st.session_state:
     st.session_state.results = []
 
-if st.button("Submit"):
+if submit_button:
     if address_input:
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
-            # If the input looks like comma-separated coordinates, use them directly.
+            # If the input appears to be comma-separated coordinates, use them directly.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -105,7 +107,7 @@ if st.button("Submit"):
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
-                # Otherwise, geocode the address using each selected GIS service.
+                # Otherwise, use each selected GIS service for geocoding the address.
                 if "Nominatim" in gis_services:
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
@@ -150,11 +152,11 @@ if st.button("Submit"):
     else:
         st.warning("Please enter at least one address or coordinate.")
 
-# Create the base Folium map and add a MarkerCluster.
+# Create the base Folium map.
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Group markers by nearly identical coordinates.
+# Group markers by nearly identical coordinates (round to 5 decimals).
 grouped_by_coord = {}
 for res in st.session_state.results:
     lat = res['Latitude']
@@ -162,28 +164,20 @@ for res in st.session_state.results:
     if lat is None or lon is None or math.isnan(lat) or math.isnan(lon):
         st.error(f"Skipping invalid coordinates for input {res['Input']} from {res['Source']}: ({lat}, {lon})")
         continue
-    # Round coordinates to group nearly identical locations (e.g., 5 decimal places)
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
 
 # For each group, create one marker.
 for key, group in grouped_by_coord.items():
-    # Use the average of the group for display.
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
     
-    # Build tooltip text.
     tooltip_lines = []
-    # If markers come from the same input, list input once per package.
     for item in group:
         tooltip_lines.append(f"Input: {item['Input']}<br>{item['Source']}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
     tooltip_text = "<br><br>".join(tooltip_lines)
     
-    # If there's more than one result at this spot, use a distinct marker color (e.g., black).
-    if len(group) > 1:
-        marker_color = "black"
-    else:
-        marker_color = group[0]['Color']
+    marker_color = "black" if len(group) > 1 else group[0]['Color']
     
     folium.Marker(
         location=[avg_lat, avg_lon],
