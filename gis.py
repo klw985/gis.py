@@ -4,7 +4,6 @@ from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 import geopandas as gpd
-import pandas as pd
 import requests
 from opencage.geocoder import OpenCageGeocode  # Import OpenCage library
 
@@ -91,18 +90,17 @@ if st.button("Submit"):
     if address_input:
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
-        # Loop through each input line and process it
-        for index, line in enumerate(lines, start=1):
-            # If the input looks like comma-separated coordinates
+        for line in lines:
+            # If the input looks like comma-separated coordinates, use them directly
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
                     results.append({
+                        'Input': line,
                         'Latitude': lat,
                         'Longitude': lon,
-                        'Source': f'Coordinate-{index}',
-                        'Color': 'green',
-                        'Number': index
+                        'Source': 'Coordinate',
+                        'Color': 'green'
                     })
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
@@ -112,41 +110,41 @@ if st.button("Submit"):
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
                         results.append({
+                            'Input': line,
                             'Latitude': lat,
                             'Longitude': lon,
-                            'Source': f'Nominatim-{index}',
-                            'Color': 'blue',
-                            'Number': index
+                            'Source': 'Nominatim',
+                            'Color': 'blue'
                         })
                 if "ArcGIS" in gis_services:
                     lat, lon = geocode_with_arcgis_api(line)
                     if lat is not None and lon is not None:
                         results.append({
+                            'Input': line,
                             'Latitude': lat,
                             'Longitude': lon,
-                            'Source': f'ArcGIS-{index}',
-                            'Color': 'red',
-                            'Number': index
+                            'Source': 'ArcGIS',
+                            'Color': 'red'
                         })
                 if "GeoPandas" in gis_services:
                     lat, lon = geocode_with_geopandas(line)
                     if lat is not None and lon is not None:
                         results.append({
+                            'Input': line,
                             'Latitude': lat,
                             'Longitude': lon,
-                            'Source': f'GeoPandas-{index}',
-                            'Color': 'purple',
-                            'Number': index
+                            'Source': 'GeoPandas',
+                            'Color': 'purple'
                         })
                 if "OpenCage" in gis_services:
                     lat, lon = geocode_with_opencage(line)
                     if lat is not None and lon is not None:
                         results.append({
+                            'Input': line,
                             'Latitude': lat,
                             'Longitude': lon,
-                            'Source': f'OpenCage-{index}',
-                            'Color': 'orange',
-                            'Number': index
+                            'Source': 'OpenCage',
+                            'Color': 'orange'
                         })
         st.session_state.results = results
     else:
@@ -156,41 +154,35 @@ if st.button("Submit"):
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Group results by the input line number
+# Group results by the input text (address or coordinates)
 grouped = {}
 for res in st.session_state.results:
-    line_no = res['Number']
-    if line_no not in grouped:
-        grouped[line_no] = []
-    grouped[line_no].append(res)
+    key = res['Input']
+    if key not in grouped:
+        grouped[key] = []
+    grouped[key].append(res)
 
-# For each group (i.e. each input line), create one marker with detailed tooltip info
-for line_no, group in grouped.items():
-    # Compute a representative coordinate (average of the group)
+# For each input group, compute a representative coordinate (average of results) and build tooltip text
+for input_text, group in grouped.items():
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
-    
-    # Build tooltip text that shows:
-    #   - The input line number
-    #   - Each GIS service (package) and its returned coordinates (rounded for clarity)
-    tooltip_lines = [f"Line: {line_no}"]
+    tooltip_lines = [f"Input: {input_text}"]
     for item in group:
-        service = item['Source'].split('-')[0]
-        tooltip_lines.append(f"{service}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
+        tooltip_lines.append(f"{item['Source']}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
     tooltip_text = "<br>".join(tooltip_lines)
     
-    # Add marker to the cluster with both a tooltip (on hover) and a popup (on click)
+    # Use the first item's color for the marker icon
+    marker_color = group[0]['Color']
+    
     folium.Marker(
         location=[avg_lat, avg_lon],
         tooltip=tooltip_text,
         popup=folium.Popup(tooltip_text, parse_html=True),
-        icon=folium.Icon(color=group[0]['Color'], icon='info-sign')
+        icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
 
-# Display the map in Streamlit
 st_data = st_folium(m, width=725, height=500)
 
-# Optionally, display the last clicked coordinates
 if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
     lat = st_data['last_clicked']['lat']
     lon = st_data['last_clicked']['lng']
