@@ -14,7 +14,7 @@ st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
-OPENCAGE_API_KEY = "c45010c61631462eac954223488bbd4b"  # Replace with your API key if needed
+OPENCAGE_API_KEY = "c45010c61631462eac954223488bbd4b"  # Replace with your API key from https://opencagedata.com
 opencage_geocoder = OpenCageGeocode(OPENCAGE_API_KEY)
 
 def geocode_with_nominatim(address):
@@ -29,20 +29,28 @@ def geocode_with_nominatim(address):
 def geocode_with_arcgis_api(address):
     try:
         url = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates"
-        params = {'f': 'json', 'singleLine': address, 'outFields': 'Match_addr,Addr_type'}
+        params = {
+            'f': 'json',
+            'singleLine': address,
+            'outFields': 'Match_addr,Addr_type'
+        }
         response = requests.get(url, params=params)
         if response.status_code == 200:
             data = response.json()
-            if data.get('candidates'):
+            if data['candidates']:
                 best_match = data['candidates'][0]
                 return best_match['location']['y'], best_match['location']['x']
     except Exception as e:
-        st.error(f"ArcGIS error for {address}: {e}")
+        st.error(f"ArcGIS REST API error for {address}: {e}")
     return None, None
 
 def geocode_with_geopandas(address):
     try:
-        gdf = gpd.tools.geocode([address], provider="nominatim", user_agent="geo_app")
+        gdf = gpd.tools.geocode(
+            [address],
+            provider="nominatim",
+            user_agent="geo_app"
+        )
         if not gdf.empty:
             return gdf.geometry.y.iloc[0], gdf.geometry.x.iloc[0]
     except Exception as e:
@@ -57,9 +65,9 @@ def geocode_with_opencage(address):
             if location:
                 return location.get('lat'), location.get('lng')
             else:
-                st.error(f"OpenCage returned unexpected format for {address}.")
+                st.error(f"OpenCage returned an unexpected format for {address}.")
         else:
-            st.warning(f"No results from OpenCage for {address}.")
+            st.warning(f"No results returned from OpenCage for {address}.")
     except Exception as e:
         st.error(f"OpenCage error for {address}: {e}")
     return None, None
@@ -69,8 +77,10 @@ st.title("GIS Cross-Validation")
 # Load Missouri 2010 congressional districts from the dedicated folder.
 try:
     districts_gdf = gpd.read_file("congressional_districts/gz_2010_29_500_11_500k.shp")
+    # Convert to WGS84 (EPSG:4326) so that point-in-polygon tests work.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
-    # (Optional debugging) st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
+    # Uncomment if you need to inspect available columns:
+    # st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
     districts_gdf = None
@@ -104,7 +114,7 @@ if 'results' not in st.session_state:
 
 if submit_button:
     if address_input:
-        lines = [line.strip() for line in address_input.splitlines() if line.strip()]
+        lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
             # Use direct coordinates if input looks like comma-separated numbers.
@@ -118,7 +128,7 @@ if submit_button:
                         'Source': 'Coordinate',
                         'Color': 'green'
                     })
-                except Exception:
+                except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
                 if "Nominatim" in gis_services:
@@ -167,11 +177,6 @@ if submit_button:
 
 # Create the base Folium map.
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
-# Add tile layers.
-folium.TileLayer('OpenStreetMap', name='Street View').add_to(m)
-folium.TileLayer('Esri.WorldImagery', name='Satellite View').add_to(m)
-folium.LayerControl().add_to(m)
-
 marker_cluster = MarkerCluster().add_to(m)
 
 # Group markers by nearly identical coordinates (rounded to 5 decimals).
@@ -185,6 +190,7 @@ for res in st.session_state.results:
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
 
+# For each group, create one marker and add district info.
 for key, group in grouped_by_coord.items():
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
@@ -207,22 +213,18 @@ for key, group in grouped_by_coord.items():
         icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
 
-# (Optional) Fit bounds if desired.
+# Automatically adjust the map view to include all markers.
 all_coords = [
     (res['Latitude'], res['Longitude'])
     for res in st.session_state.results
-    if res['Latitude'] is not None and res['Longitude'] is not None
-       and not math.isnan(res['Latitude']) and not math.isnan(res['Longitude'])
+    if res['Latitude'] is not None and res['Longitude'] is not None and not math.isnan(res['Latitude']) and not math.isnan(res['Longitude'])
 ]
 if all_coords:
-    try:
-        min_lat = min(lat for lat, lon in all_coords)
-        max_lat = max(lat for lat, lon in all_coords)
-        min_lon = min(lon for lat, lon in all_coords)
-        max_lon = max(lon for lat, lon in all_coords)
-        m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
-    except Exception as e:
-        st.error(f"Error fitting bounds: {e}")
+    min_lat = min(lat for lat, lon in all_coords)
+    max_lat = max(lat for lat, lon in all_coords)
+    min_lon = min(lon for lat, lon in all_coords)
+    max_lon = max(lon for lat, lon in all_coords)
+    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
 
 # Create two columns: one for the map and one for the color legend.
 col_map, col_legend = st.columns([3, 1])
@@ -231,15 +233,15 @@ with col_map:
 with col_legend:
     st.markdown("### Color Legend")
     st.markdown("""
-    - **Nominatim**: Blue  
-    - **ArcGIS**: Red  
-    - **GeoPandas**: Purple  
-    - **OpenCage**: Orange  
-    - **Direct Coordinates**: Green  
-    - **Overlapping Markers**: Black
+- **Nominatim**: Blue  
+- **ArcGIS**: Red  
+- **GeoPandas**: Purple  
+- **OpenCage**: Orange  
+- **Direct Coordinates**: Green  
+- **Overlapping Markers**: Black
     """)
 
-# Display last clicked coordinates in the requested format along with district.
+# Display last clicked coordinates in the requested format along with the district.
 if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
     last_clicked = st_data['last_clicked']
     coords_str = f"{last_clicked['lat']}, {last_clicked['lng']}"
@@ -247,7 +249,7 @@ if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None
     clicked_district = get_district_from_point(clicked_point, districts_gdf)
     st.markdown(f"**Last clicked:** {coords_str} (District: {clicked_district})")
 
-# Build a table of all geocoded points with district info.
+# Build a table of all geocoded points with district information.
 if st.session_state.results:
     results_table = []
     for res in st.session_state.results:
@@ -264,3 +266,13 @@ if st.session_state.results:
     df = pd.DataFrame(results_table)
     st.markdown("### Geocoded Results")
     st.dataframe(df)
+
+st.markdown("### Color Legend")
+st.markdown("""
+- **Nominatim**: Blue  
+- **ArcGIS**: Red  
+- **GeoPandas**: Purple  
+- **OpenCage**: Orange  
+- **Direct Coordinates**: Green  
+- **Overlapping Markers**: Black
+""")
