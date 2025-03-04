@@ -77,6 +77,10 @@ st.title("GIS Cross-Validation")
 # Load Missouri 2010 congressional districts GeoJSON.
 try:
     districts_gdf = gpd.read_file("2010_Congressional_Districts.json")
+    # Convert to WGS84 so that point tests work
+    districts_gdf = districts_gdf.to_crs(epsg=4326)
+    # For debugging: print the available columns to inspect property names.
+    st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
     districts_gdf = None
@@ -84,25 +88,23 @@ except Exception as e:
 def get_district_from_point(point, districts_gdf):
     """
     Returns a string identifying the congressional district that contains the point.
-    Checks common property names; adjust as needed for your GeoJSON.
+    Adjust the list of candidate keys based on your GeoJSON's properties.
     """
     if districts_gdf is None:
         return "No district data"
     for idx, row in districts_gdf.iterrows():
         if row['geometry'].contains(point):
-            # Try several common property names; adjust based on your file.
-            for col in ['CD115FP', 'district', 'DISTRICT', 'NAME']:
+            # Update these keys based on the columns printed above.
+            for col in ['CD115FP', 'district', 'DISTRICT', 'NAME', 'GEOID']:
                 if col in row and row[col]:
                     return row[col]
             return "Unknown District"
     return "Not in any district"
 
-# Arrange input elements: left column for text area and submit button, right column for GIS services dropdown.
+# Arrange input elements.
 col1, col2 = st.columns([3, 1])
 with col1:
-    address_input = st.text_area(
-        "Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:"
-    )
+    address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
     submit_button = st.button("Submit")
 with col2:
     gis_services = st.multiselect(
@@ -111,7 +113,6 @@ with col2:
         default=["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"]
     )
 
-# Initialize session state for results if not already present.
 if 'results' not in st.session_state:
     st.session_state.results = []
 
@@ -120,7 +121,7 @@ if submit_button:
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
-            # If the input appears to be comma-separated coordinates, use them directly.
+            # If the input looks like comma-separated coordinates, use them directly.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -134,7 +135,6 @@ if submit_button:
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
-                # Otherwise, geocode the address using each selected GIS service.
                 if "Nominatim" in gis_services:
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
@@ -183,7 +183,7 @@ if submit_button:
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 marker_cluster = MarkerCluster().add_to(m)
 
-# Group markers by nearly identical coordinates (rounding to 5 decimals).
+# Group markers by nearly identical coordinates.
 grouped_by_coord = {}
 for res in st.session_state.results:
     lat = res['Latitude']
@@ -194,12 +194,12 @@ for res in st.session_state.results:
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
 
-# For each group, create one marker and report the congressional district.
+# Create markers and add district info.
 for key, group in grouped_by_coord.items():
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
     
-    # Create a Shapely point (note: Point takes (longitude, latitude))
+    # Create a Shapely point for the averaged coordinates (note: Point expects (lon, lat))
     point = Point(avg_lon, avg_lat)
     district = get_district_from_point(point, districts_gdf)
     
@@ -217,7 +217,7 @@ for key, group in grouped_by_coord.items():
         icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
 
-# Automatically adjust the map view to include all points.
+# Adjust the map view to include all points.
 all_coords = [
     (res['Latitude'], res['Longitude'])
     for res in st.session_state.results
