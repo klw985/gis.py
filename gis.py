@@ -13,7 +13,7 @@ st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 # Initialize geocoders
 geocoder_nominatim = Nominatim(user_agent="geo_app", timeout=10)
 
-OPENCAGE_API_KEY = "c45010c61631462eac954223488bbd4b"  # Replace with your free API key from https://opencagedata.com
+OPENCAGE_API_KEY = "c45010c61631462eac954223488bbd4b"  # Replace with your API key from https://opencagedata.com
 opencage_geocoder = OpenCageGeocode(OPENCAGE_API_KEY)
 
 # Function to geocode using Nominatim
@@ -100,7 +100,7 @@ if st.button("Submit"):
 
         # Loop through addresses or coordinates, assign an index number for each
         for index, line in enumerate(lines, start=1):
-            # Check if the input line looks like a coordinate (contains comma-separated numbers)
+            # Check if the line is a coordinate (comma-separated numbers)
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -125,7 +125,6 @@ if st.button("Submit"):
                             'Color': 'blue', 
                             'Number': index
                         })
-
                 if "ArcGIS" in gis_services:
                     lat, lon = geocode_with_arcgis_api(line)
                     if lat is not None and lon is not None:
@@ -136,7 +135,6 @@ if st.button("Submit"):
                             'Color': 'red', 
                             'Number': index
                         })
-
                 if "GeoPandas" in gis_services:
                     lat, lon = geocode_with_geopandas(line)
                     if lat is not None and lon is not None:
@@ -147,7 +145,6 @@ if st.button("Submit"):
                             'Color': 'purple', 
                             'Number': index
                         })
-
                 if "OpenCage" in gis_services:
                     lat, lon = geocode_with_opencage(line)
                     if lat is not None and lon is not None:
@@ -170,12 +167,13 @@ m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 # Create a MarkerCluster object and add it to the map
 marker_cluster = MarkerCluster().add_to(m)
 
-# Add all markers to the MarkerCluster from session state
+# Add markers with both popups (on click) and tooltips (on hover)
 for result in st.session_state.results:
     if result['Latitude'] is not None and result['Longitude'] is not None:
         folium.Marker(
             location=[result['Latitude'], result['Longitude']],
-            popup=f"{result['Source']}: {result['Latitude']}, {result['Longitude']}",
+            popup=folium.Popup(f"{result['Source']}: {result['Latitude']}, {result['Longitude']}", parse_html=True),
+            tooltip=f"{result['Source']}: {result['Latitude']}, {result['Longitude']}",
             icon=folium.Icon(color=result['Color'], icon='info-sign')
         ).add_to(marker_cluster)
 
