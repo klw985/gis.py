@@ -57,7 +57,7 @@ def geocode_with_opencage(address):
             if location:
                 return location.get('lat'), location.get('lng')
             else:
-                st.error(f"OpenCage returned unexpected format for {address}.")
+                st.error(f"OpenCage unexpected format for {address}.")
         else:
             st.warning(f"No results from OpenCage for {address}.")
     except Exception as e:
@@ -66,12 +66,11 @@ def geocode_with_opencage(address):
 
 st.title("GIS Cross-Validation")
 
-# Load congressional districts from your folder.
+# Load congressional districts shapefile from a dedicated folder.
 try:
     districts_gdf = gpd.read_file("congressional_districts/gz_2010_29_500_11_500k.shp")
     districts_gdf = districts_gdf.to_crs(epsg=4326)
-    # (Optional) Remove debugging output:
-    # st.write("District columns:", districts_gdf.columns.tolist())
+    # (Optional debugging) st.write("District columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading district boundaries: " + str(e))
     districts_gdf = None
@@ -104,13 +103,18 @@ if submit_button:
         lines = [line.strip() for line in address_input.splitlines() if line.strip()]
         results = []
         for line in lines:
-            # If line looks like coordinates, use directly.
+            # If input looks like comma-separated coordinates, use them directly.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
-                    results.append({'Input': line, 'Latitude': lat, 'Longitude': lon,
-                                    'Source': 'Coordinate', 'Color': 'green'})
-                except ValueError:
+                    results.append({
+                        'Input': line,
+                        'Latitude': lat,
+                        'Longitude': lon,
+                        'Source': 'Coordinate',
+                        'Color': 'green'
+                    })
+                except Exception:
                     st.error(f"Invalid coordinate: {line}")
             else:
                 if "Nominatim" in gis_services:
@@ -137,7 +141,7 @@ if submit_button:
     else:
         st.warning("Please enter at least one address or coordinate.")
 
-# Create base Folium map with tile layers.
+# Create the base Folium map with tile layers.
 m = folium.Map(location=[38.5767, -92.1735], zoom_start=5)
 folium.TileLayer('OpenStreetMap', name='Street View').add_to(m)
 folium.TileLayer('Esri.WorldImagery', name='Satellite View').add_to(m)
@@ -150,7 +154,6 @@ for res in st.session_state.results:
     lat = res['Latitude']
     lon = res['Longitude']
     if lat is None or lon is None or math.isnan(lat) or math.isnan(lon):
-        st.error(f"Skipping invalid: {res}")
         continue
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
@@ -168,23 +171,26 @@ for key, group in grouped_by_coord.items():
     folium.Marker(location=[avg_lat, avg_lon],
                   tooltip=tooltip_text,
                   popup=folium.Popup(tooltip_text, parse_html=True),
-                  icon=folium.Icon(color=marker_color, icon='info-sign')
-                 ).add_to(marker_cluster)
+                  icon=folium.Icon(color=marker_color, icon='info-sign')).add_to(marker_cluster)
 
-# Fit bounds if there are valid markers.
+# Fit bounds only if there are valid coordinates.
 all_coords = [(res['Latitude'], res['Longitude']) for res in st.session_state.results
-              if res['Latitude'] is not None and res['Longitude'] is not None
+              if res['Latitude'] is not None and res['Longitude'] is not None 
               and not math.isnan(res['Latitude']) and not math.isnan(res['Longitude'])]
 if all_coords:
-    min_lat = min(lat for lat, lon in all_coords)
-    max_lat = max(lat for lat, lon in all_coords)
-    min_lon = min(lon for lat, lon in all_coords)
-    max_lon = max(lon for lat, lon in all_coords)
-    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
+    try:
+        min_lat = min(lat for lat, lon in all_coords)
+        max_lat = max(lat for lat, lon in all_coords)
+        min_lon = min(lon for lat, lon in all_coords)
+        max_lon = max(lon for lat, lon in all_coords)
+        m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
+    except Exception as e:
+        st.error(f"Error fitting bounds: {e}")
 
+# Render the map.
 st_data = st_folium(m, width=725, height=500)
 
-# Display last clicked coordinates in the requested format along with district.
+# Display last clicked coordinates in a simple comma-separated format along with district.
 if st_data and 'last_clicked' in st_data and st_data['last_clicked']:
     last_clicked = st_data['last_clicked']
     coords_str = f"{last_clicked['lat']}, {last_clicked['lng']}"
