@@ -162,11 +162,11 @@ m = folium.Map(location=[38.573936, -92.603760], zoom_start=7, control_scale=Tru
 folium.TileLayer('OpenStreetMap', name="Street View").add_to(m)
 folium.TileLayer('Esri.WorldImagery', name="Satellite View").add_to(m)
 
-# Load and add Missouri 2010 congressional district boundaries.
-try:
-    folium.GeoJson("2010_Congressional_Districts.json", name="Congressional Districts").add_to(m)
-except Exception as e:
-    st.error("Error loading Missouri congressional district boundaries: " + str(e))
+# -- Temporarily removed congressional district layer --
+# try:
+#     folium.GeoJson("2010_Congressional_Districts.json", name="Congressional Districts").add_to(m)
+# except Exception as e:
+#     st.error("Error loading Missouri congressional district boundaries: " + str(e))
 
 # Add layer control so users can toggle layers.
 folium.LayerControl().add_to(m)
