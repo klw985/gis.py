@@ -76,12 +76,11 @@ st.title("GIS Cross-Validation")
 
 # Load Missouri 2010 congressional districts from the dedicated folder.
 try:
-    # Ensure all associated files (.shp, .dbf, .prj, .shx, .xml) are in the folder 'congressional_districts'
     districts_gdf = gpd.read_file("congressional_districts/gz_2010_29_500_11_500k.shp")
     # Convert to WGS84 (EPSG:4326) so that point-in-polygon tests work.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
-    # For debugging: print available columns to inspect property names.
-    #st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
+    # Uncomment the next line if you need to inspect the available columns for debugging.
+    # st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
     districts_gdf = None
@@ -89,17 +88,14 @@ except Exception as e:
 def get_district_from_point(point, districts_gdf):
     """
     Returns the congressional district for a given point.
-    Adjust the candidate keys based on the columns printed above.
+    For your dataset, the 'CD' column contains the district number.
     """
     if districts_gdf is None:
         return "No district data"
     for idx, row in districts_gdf.iterrows():
         if row['geometry'].contains(point):
-            # Try common candidate keys. Update these based on your data.
-            for col in ['CD115FP', 'district', 'DISTRICT', 'NAME', 'GEOID']:
-                if col in row and row[col]:
-                    return row[col]
-            return "Unknown District"
+            # In this case, we assume 'CD' holds the congressional district.
+            return row['CD']
     return "Not in any district"
 
 # Arrange input elements in two columns.
@@ -233,17 +229,25 @@ if all_coords:
 
 st_data = st_folium(m, width=725, height=500)
 
-if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
-    lat = st_data['last_clicked']['lat']
-    lon = st_data['last_clicked']['lng']
-    st.write(f"Last clicked coordinates: Latitude {lat}, Longitude {lon}")
+# Build a table of all geocoded points with district information.
+if st.session_state.results:
+    results_table = []
+    for res in st.session_state.results:
+        lat = res['Latitude']
+        lon = res['Longitude']
+        if lat is not None and lon is not None and not math.isnan(lat) and not math.isnan(lon):
+            pt = Point(lon, lat)
+            district = get_district_from_point(pt, districts_gdf)
+        else:
+            district = "N/A"
+        row = res.copy()
+        row['District'] = district
+        results_table.append(row)
+    df = pd.DataFrame(results_table)
+    st.markdown("### Geocoded Results")
+    st.dataframe(df)
 
-st.markdown("### Color Legend")
-st.markdown("""
-- **Nominatim**: Blue  
-- **ArcGIS**: Red  
-- **GeoPandas**: Purple  
-- **OpenCage**: Orange  
-- **Direct Coordinates**: Green  
-- **Overlapping Markers**: Black
-""")
+# Display last clicked coordinates that update as you click on different parts of the map.
+if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None:
+    last_clicked = st_data['last_clicked']
+    st.markdown(f"**Last clicked coordinates:** Latitude {last_clicked['lat']}, Longitude {last_clicked['lng']}")
