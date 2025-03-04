@@ -7,6 +7,8 @@ import geopandas as gpd
 import requests
 from opencage.geocoder import OpenCageGeocode  # Import OpenCage library
 import math
+import pandas as pd
+from shapely.geometry import Point
 
 st.set_page_config(page_title="GIS Map Viewer", layout="wide")
 
@@ -72,10 +74,35 @@ def geocode_with_opencage(address):
 
 st.title("GIS Cross-Validation")
 
-# Arrange input elements using columns so the dropdown doesn't cover the submit button.
+# Load Missouri 2010 congressional districts GeoJSON.
+try:
+    districts_gdf = gpd.read_file("2010_Congressional_Districts.json")
+except Exception as e:
+    st.error("Error loading Missouri congressional district boundaries: " + str(e))
+    districts_gdf = None
+
+def get_district_from_point(point, districts_gdf):
+    """
+    Returns a string identifying the congressional district that contains the point.
+    Checks common property names; adjust as needed for your GeoJSON.
+    """
+    if districts_gdf is None:
+        return "No district data"
+    for idx, row in districts_gdf.iterrows():
+        if row['geometry'].contains(point):
+            # Try several common property names; adjust based on your file.
+            for col in ['CD115FP', 'district', 'DISTRICT', 'NAME']:
+                if col in row and row[col]:
+                    return row[col]
+            return "Unknown District"
+    return "Not in any district"
+
+# Arrange input elements: left column for text area and submit button, right column for GIS services dropdown.
 col1, col2 = st.columns([3, 1])
 with col1:
-    address_input = st.text_area("Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:")
+    address_input = st.text_area(
+        "Enter one or more addresses or coordinates (e.g., 37.7749, -122.4194), one per line:"
+    )
     submit_button = st.button("Submit")
 with col2:
     gis_services = st.multiselect(
@@ -93,7 +120,7 @@ if submit_button:
         lines = [line.strip() for line in address_input.split('\n') if line.strip()]
         results = []
         for line in lines:
-            # If the input looks like comma-separated coordinates, use them directly.
+            # If the input appears to be comma-separated coordinates, use them directly.
             if ',' in line and all(part.strip().replace('.', '', 1).isdigit() for part in line.split(',')):
                 try:
                     lat, lon = map(float, line.split(','))
@@ -107,7 +134,7 @@ if submit_button:
                 except ValueError:
                     st.error(f"Invalid coordinate: {line}")
             else:
-                # Otherwise, use each selected GIS service for geocoding the address.
+                # Otherwise, geocode the address using each selected GIS service.
                 if "Nominatim" in gis_services:
                     lat, lon = geocode_with_nominatim(line)
                     if lat is not None and lon is not None:
@@ -167,12 +194,16 @@ for res in st.session_state.results:
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
 
-# For each group, create one marker.
+# For each group, create one marker and report the congressional district.
 for key, group in grouped_by_coord.items():
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
     
-    tooltip_lines = []
+    # Create a Shapely point (note: Point takes (longitude, latitude))
+    point = Point(avg_lon, avg_lat)
+    district = get_district_from_point(point, districts_gdf)
+    
+    tooltip_lines = [f"District: {district}"]
     for item in group:
         tooltip_lines.append(f"Input: {item['Input']}<br>{item['Source']}: ({item['Latitude']:.4f}, {item['Longitude']:.4f})")
     tooltip_text = "<br><br>".join(tooltip_lines)
@@ -208,10 +239,10 @@ if st_data and 'last_clicked' in st_data and st_data['last_clicked'] is not None
 
 st.markdown("### Color Legend")
 st.markdown("""
-- **Nominatim**: Blue
-- **ArcGIS**: Red
-- **GeoPandas**: Purple
-- **OpenCage**: Orange
-- **Direct Coordinates**: Green
+- **Nominatim**: Blue  
+- **ArcGIS**: Red  
+- **GeoPandas**: Purple  
+- **OpenCage**: Orange  
+- **Direct Coordinates**: Green  
 - **Overlapping Markers**: Black
 """)
