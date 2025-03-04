@@ -76,11 +76,11 @@ st.title("GIS Cross-Validation")
 
 # Load Missouri 2010 congressional districts from the dedicated folder.
 try:
-    # Ensure all associated files (.shp, .dbf, .prj, .shx) are in the folder 'congressional_districts'
-    districts_gdf = gpd.read_file("congressional_districts/2010_Congressional_Districts.shp")
-    # Convert to WGS84 (EPSG:4326) if necessary.
+    # Ensure all associated files (.shp, .dbf, .prj, .shx, .xml) are in the folder 'congressional_districts'
+    districts_gdf = gpd.read_file("congressional_districts/gz_2010_29_500_11_500k.shp")
+    # Convert to WGS84 (EPSG:4326) so that point-in-polygon tests work.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
-    # For debugging: show available columns so you know which property holds the district label.
+    # For debugging: print available columns to inspect property names.
     st.write("District GeoDataFrame columns:", districts_gdf.columns.tolist())
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
@@ -88,14 +88,14 @@ except Exception as e:
 
 def get_district_from_point(point, districts_gdf):
     """
-    Returns the congressional district for a given Shapely point.
-    Adjust the candidate keys based on your GeoDataFrame's properties.
+    Returns the congressional district for a given point.
+    Adjust the candidate keys based on the columns printed above.
     """
     if districts_gdf is None:
         return "No district data"
     for idx, row in districts_gdf.iterrows():
         if row['geometry'].contains(point):
-            # Try candidate keys; update these based on the printed columns.
+            # Try common candidate keys. Update these based on your data.
             for col in ['CD115FP', 'district', 'DISTRICT', 'NAME', 'GEOID']:
                 if col in row and row[col]:
                     return row[col]
@@ -195,12 +195,12 @@ for res in st.session_state.results:
     key = (round(lat, 5), round(lon, 5))
     grouped_by_coord.setdefault(key, []).append(res)
 
-# For each group, create one marker with district info.
+# For each group, create one marker and add district info.
 for key, group in grouped_by_coord.items():
     avg_lat = sum(item['Latitude'] for item in group) / len(group)
     avg_lon = sum(item['Longitude'] for item in group) / len(group)
     
-    # Create a point for the averaged coordinates (Point takes (lon, lat)).
+    # Create a Shapely point (Point takes (lon, lat)).
     point = Point(avg_lon, avg_lat)
     district = get_district_from_point(point, districts_gdf)
     
@@ -218,7 +218,7 @@ for key, group in grouped_by_coord.items():
         icon=folium.Icon(color=marker_color, icon='info-sign')
     ).add_to(marker_cluster)
 
-# Adjust the map view to include all markers.
+# Automatically adjust the map view to include all markers.
 all_coords = [
     (res['Latitude'], res['Longitude'])
     for res in st.session_state.results
