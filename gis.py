@@ -164,7 +164,7 @@ folium.TileLayer('Esri.WorldImagery', name="Satellite View").add_to(m)
 
 # Load and add Missouri 2010 congressional district boundaries.
 try:
-    folium.GeoJson("missouri_cd_2010.geojson", name="Congressional Districts").add_to(m)
+    folium.GeoJson("https://example.com/path/to/missouri_cd_2010.geojson", name="Congressional Districts").add_to(m)
 except Exception as e:
     st.error("Error loading Missouri congressional district boundaries: " + str(e))
 
