@@ -52,6 +52,27 @@ def geocode_with_geopandas(address):
         st.error(f"GeoPandas error for {address}: {e}")
     return None, None
 
+# Function to geocode using OpenCage API
+def geocode_with_opencage(address):
+    try:
+        # Replace 'YOUR_OPENCAGE_API_KEY' with your actual OpenCage API key
+        api_key =  "c45010c61631462eac954223488bbd4b"
+        url = "https://api.opencagedata.com/geocode/v1/json"
+        params = {
+            "q": address,
+            "key": api_key,
+            "no_annotations": 1
+        }
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data["results"]:
+                best_match = data["results"][0]
+                return best_match["geometry"]["lat"], best_match["geometry"]["lng"]
+    except Exception as e:
+        st.error(f"OpenCage API error for {address}: {e}")
+    return None, None
+
 # Streamlit app
 st.title("GIS Batch Processing")
 
@@ -62,11 +83,11 @@ st.markdown("### The results will show geocoded coordinates for each address usi
 # User input for addresses
 address_input = st.text_area("Enter addresses:", placeholder="Enter one address per line...")
 
-# GIS service selection
+# GIS service selection (note the addition of OpenCage)
 gis_services = st.multiselect(
     "Select GIS services to use:",
-    ["Nominatim", "ArcGIS", "GeoPandas"],
-    default=["Nominatim", "ArcGIS", "GeoPandas"]
+    ["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"],
+    default=["Nominatim", "ArcGIS", "GeoPandas", "OpenCage"]
 )
 
 # When the user clicks the "Process" button, geocode the addresses
@@ -97,6 +118,12 @@ if st.button("Process"):
                 row['GeoPandas Latitude'] = lat
                 row['GeoPandas Longitude'] = lon
 
+            # OpenCage
+            if "OpenCage" in gis_services:
+                lat, lon = geocode_with_opencage(line)
+                row['OpenCage Latitude'] = lat
+                row['OpenCage Longitude'] = lon
+
             results.append(row)
 
         # Display results
@@ -111,6 +138,6 @@ if st.button("Process"):
     else:
         st.warning("Please enter at least one address.")
 
-# Provide a placeholder for any additional notes
+# Additional notes for the user
 st.markdown("### Notes")
 st.markdown("Ensure the addresses are entered in a standardized format for best results.")
