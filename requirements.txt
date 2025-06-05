@@ -2,7 +2,11 @@ streamlit>=1.18.0
 folium>=0.12.1
 geopy>=2.2.0
 geopandas>=0.10.2
+fiona>=1.8.20          # GeoPandas’ core dependency (GDAL wrapper)
+shapely>=1.8.5         # Geometry library used by GeoPandas
+pyproj>=3.4.1          # CRS transformations
+rtree>=1.0.1           # Spatial indexing (optional but recommended)
 pandas>=1.3.3
 requests>=2.26.0
-streamlit-folium
+streamlit-folium>=0.12.0
 opencage>=1.2.0
