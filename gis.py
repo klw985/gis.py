@@ -76,7 +76,7 @@ st.title("GIS Cross-Validation")
 
 # Load Missouri 2010 congressional districts from the dedicated folder.
 try:
-    districts_gdf = gpd.read_file("congressional_districts/gz_2010_29_500_11_500k.shp")
+    districts_gdf = gpd.read_file("congressional_districts/MO_2011_US_Congressional_Districts_(SHP).shp")
     # Convert to WGS84 (EPSG:4326) so that point-in-polygon tests work.
     districts_gdf = districts_gdf.to_crs(epsg=4326)
     # Uncomment if you need to inspect available columns:
